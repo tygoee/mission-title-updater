@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Mission title updater
-// @namespace    http://tampermonkey.net/
-// @version      1.0
+// @author       tygoee
+// @version      1.0.1
 // @description  Updates mission title
+// @namespace    http://tampermonkey.net/
 // @match        https://www.operacni-stredisko.cz/*
 // @match        https://policie.operacni-stredisko.cz/*
 // @match        https://www.alarmcentral-spil.dk/*
@@ -46,45 +47,94 @@
 
 const mission_names = {
     "0": "Brandende afvalbak",
-    // here paste the mission list
+    // paste the mission list here
 };
 
-(function() {
+// For testing/debugging
+const mission_ids = new Proxy({}, {
+    get: (target, prop) => prop
+});
+
+(function () {
     'use strict';
 
-    function missionUpdate() {
-        const mission_type_id = document.getElementById('mission_general_info').getAttribute('data-mission-type');
-        const overlay_index = document.getElementById('mission_general_info').getAttribute('data-overlay-index');
-        const mission_id = overlay_index ? `${mission_type_id}-${overlay_index}` : mission_type_id;
+    function missionId(mission_type_id, overlay_index) {
+        // Overlay index can be both null and 'null'
+        if (overlay_index && overlay_index != 'null') {
+            return `${mission_type_id}-${overlay_index}`;
+        } else {
+            return mission_type_id;
+        }
+    }
 
-        const name = document.getElementById('missionH1');
-        if (mission_names[mission_id]) name.childNodes[1].textContent = mission_names[mission_id];
+    // Updates mission title in missions page (/missions)
+    function missionUpdate() {
+        const mission_info = document.getElementById('mission_general_info');
+        const mission_type_id = mission_info.getAttribute('data-mission-type');
+        const overlay_index = mission_info.getAttribute('data-overlay-index');
+        const mission_id = missionId(mission_type_id, overlay_index);
+
+        const title = document.getElementById('missionH1');
+
+        // Only the second text node selected to keep icons and mission claim rewards
+        const textNode = Array.from(title.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+        if (mission_names[mission_id]) textNode.textContent = ' ' + mission_names[mission_id];
     }
 
     function sidebarMissionUpdate() {
-        const sidebarEntries = document.querySelectorAll('.missionSideBarEntry');
+        const sidebarEntries = document.getElementsByClassName('missionSideBarEntry');
         for (const sidebarEntry of sidebarEntries) {
             const mission_type_id = sidebarEntry.getAttribute('mission_type_id')
             const overlay_index = sidebarEntry.getAttribute('data-overlay-index');
-            const mission_id = overlay_index == 'null' || !overlay_index ? mission_type_id : `${mission_type_id}-${overlay_index}`;
+            const mission_id = missionId(mission_type_id, overlay_index);
 
-            const name = document.getElementById(`mission_caption_${sidebarEntry.getAttribute('mission_id')}`);
-            if (mission_names[mission_id]) name.firstChild.textContent = mission_names[mission_id] + ', ';
+            const title = document.getElementById(`mission_caption_${sidebarEntry.getAttribute('mission_id')}`);
+            // Only the first child node, to keep location in the title
+            if (mission_names[mission_id]) title.firstChild.textContent = mission_names[mission_id] + ', ';
         }
+    }
+
+    function tooltipMissionUpdate(layer, content) {
+        if (!layer instanceof L.Marker) return;
+        const tooltip = layer._tooltip
+        if (!tooltip) return;
+
+        content.innerHTML = tooltip._content;
+        const mission_address = content.querySelectorAll('[id^="mission_address_"]');
+        if (!mission_address.length) return; // not a mission
+        const mission = mission_address[0].id.split('_').pop();
+
+        const sidebarEntry = document.getElementById(`mission_${mission}`);
+        const mission_type_id = sidebarEntry.getAttribute('mission_type_id')
+        const overlay_index = sidebarEntry.getAttribute('data-overlay-index');
+        const mission_id = missionId(mission_type_id, overlay_index);
+
+        if (mission_names[mission_id]) content.firstChild.textContent = mission_names[mission_id] + ', ';
+        tooltip._content = content.innerHTML;
+    }
+
+    function setupSidebarObserver() {
+        sidebarMissionUpdate(); // initial run
+
+        // Update all missions when sidebar is changed (could be made more efficient)
+        const observer = new MutationObserver(sidebarMissionUpdate);
+        document.querySelectorAll('[id^="mission_list"]').forEach(mission => {
+            observer.observe(mission, {
+                childList: true
+            });
+        });
+    }
+
+    function setupTooltipObserver() {
+        const content = document.createElement('div');
+        map.eachLayer(layer => tooltipMissionUpdate(layer, content)); // initial run
+
+        map.on("layeradd", event => tooltipMissionUpdate(event.layer, content));
     }
 
     if (location.pathname.startsWith('/missions/')) missionUpdate();
 
     if (location.pathname != '/') return;
-    sidebarMissionUpdate();
-
-    const observer = new MutationObserver(() => {
-        sidebarMissionUpdate();
-    });
-
-    document.querySelectorAll('[id^="mission_list"]').forEach(el => {
-        observer.observe(el, {
-            childList: true,
-        });
-    });
+    setupSidebarObserver();
+    setupTooltipObserver();
 })();

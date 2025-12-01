@@ -4,9 +4,9 @@ Mission title updater for Mission Chief/Meldkamerspel
 
 ## Instructions
 
-- Install tampermonkey in your browser's extensions page
+- Install Tampermonkey in your browser's extensions page (in Chrome you also need to give Tampermonkey permissions, under Extensions > My extensions > Tampermonkey > Details > Allow User Scripts. You may have to restart Chrome after this)
 
-- Create a tampermonkey add-on and paste the content of the user.js file there
+- Create a new Tampermonkey script and paste the content of the user.js file there
 
 - Copy the content from `missions.json` into the file, near the top after `const mission_names =`, replacing the example mission names
 
