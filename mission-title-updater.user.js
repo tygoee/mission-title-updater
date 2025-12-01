@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Mission title updater
 // @author       tygoee
-// @version      1.0.1
+// @version      1.0.2
 // @description  Updates mission title
 // @namespace    http://tampermonkey.net/
 // @match        https://www.operacni-stredisko.cz/*
@@ -45,71 +45,81 @@
 // @grant        none
 // ==/UserScript==
 
-const mission_names = {
+const missionNames = {
     "0": "Brandende afvalbak",
     // paste the mission list here
 };
 
 // For testing/debugging
-const mission_ids = new Proxy({}, {
+const missionIds = new Proxy({}, {
     get: (target, prop) => prop
 });
 
 (function () {
     'use strict';
 
-    function missionId(mission_type_id, overlay_index) {
+    function getMissionKey(missionTypeId, overlayIndex) {
         // Overlay index can be both null and 'null'
-        if (overlay_index && overlay_index != 'null') {
-            return `${mission_type_id}-${overlay_index}`;
+        if (overlayIndex && overlayIndex != 'null') {
+            return `${missionTypeId}-${overlayIndex}`;
         } else {
-            return mission_type_id;
+            return missionTypeId;
         }
     }
 
     // Updates mission title in missions page (/missions)
     function missionUpdate() {
-        const mission_info = document.getElementById('mission_general_info');
-        const mission_type_id = mission_info.getAttribute('data-mission-type');
-        const overlay_index = mission_info.getAttribute('data-overlay-index');
-        const mission_id = missionId(mission_type_id, overlay_index);
+        const missionInfo = document.getElementById('mission_general_info');
+        const missionTypeId = missionInfo.getAttribute('data-mission-type');
+        const overlayIndex = missionInfo.getAttribute('data-overlay-index');
+        const missionKey = getMissionKey(missionTypeId, overlayIndex);
 
         const title = document.getElementById('missionH1');
 
-        // Only the second text node selected to keep icons and mission claim rewards
-        const textNode = Array.from(title.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())
-        if (mission_names[mission_id]) textNode.textContent = ' ' + mission_names[mission_id];
+        // Only the text node selected to keep icons and mission claim rewards
+        const textNode = Array.from(title.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        if (missionNames[missionKey]) textNode.textContent = ' ' + missionNames[missionKey];
+
+        const oldCaption = title.getElementsByTagName('s');
+        if (oldCaption[0]) oldCaption[0].remove();
     }
 
     function sidebarMissionUpdate() {
         const sidebarEntries = document.getElementsByClassName('missionSideBarEntry');
         for (const sidebarEntry of sidebarEntries) {
-            const mission_type_id = sidebarEntry.getAttribute('mission_type_id')
-            const overlay_index = sidebarEntry.getAttribute('data-overlay-index');
-            const mission_id = missionId(mission_type_id, overlay_index);
+            const missionTypeId = sidebarEntry.getAttribute('mission_type_id');
+            const overlayIndex = sidebarEntry.getAttribute('data-overlay-index');
+            const missionKey = getMissionKey(missionTypeId, overlayIndex);
 
-            const title = document.getElementById(`mission_caption_${sidebarEntry.getAttribute('mission_id')}`);
-            // Only the first child node, to keep location in the title
-            if (mission_names[mission_id]) title.firstChild.textContent = mission_names[mission_id] + ', ';
+            const missionId = sidebarEntry.getAttribute('mission_id')
+            const title = document.getElementById(`mission_caption_${missionId}`);
+
+            // Only the text node, to keep location in the title
+            // Not the first child, in case of old captions with mission expansions (<s>mission</s> mission)
+            const textNode = Array.from(title.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+            if (missionNames[missionKey]) textNode.textContent = missionNames[missionKey] + ', ';
+
+            const oldCaption = document.getElementById(`mission_old_caption_${missionId}`);
+            if (oldCaption) oldCaption.remove();
         }
     }
 
     function tooltipMissionUpdate(layer, content) {
         if (!layer instanceof L.Marker) return;
-        const tooltip = layer._tooltip
+        const tooltip = layer._tooltip;
         if (!tooltip) return;
 
         content.innerHTML = tooltip._content;
-        const mission_address = content.querySelectorAll('[id^="mission_address_"]');
-        if (!mission_address.length) return; // not a mission
-        const mission = mission_address[0].id.split('_').pop();
+        const missionId = content.querySelectorAll('[id^="mission_address_"]');
+        if (!missionId.length) return; // not a mission
+        const mission = missionId[0].id.split('_').pop();
 
         const sidebarEntry = document.getElementById(`mission_${mission}`);
-        const mission_type_id = sidebarEntry.getAttribute('mission_type_id')
-        const overlay_index = sidebarEntry.getAttribute('data-overlay-index');
-        const mission_id = missionId(mission_type_id, overlay_index);
+        const missionTypeId = sidebarEntry.getAttribute('mission_type_id');
+        const overlayIndex = sidebarEntry.getAttribute('data-overlay-index');
+        const missionKey = getMissionKey(missionTypeId, overlayIndex);
 
-        if (mission_names[mission_id]) content.firstChild.textContent = mission_names[mission_id] + ', ';
+        if (missionNames[missionKey]) content.firstChild.textContent = missionNames[missionKey] + ', ';
         tooltip._content = content.innerHTML;
     }
 
